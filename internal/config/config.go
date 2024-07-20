@@ -23,6 +23,8 @@ type Config struct {
 	GCPProjectID       string
 	BigQueryDatasetID  string
 	BigQueryTableID    string
+	GCPCredentialsPath string
+	VertexAILocation   string
 	Port               string
 }
 
@@ -72,6 +74,8 @@ func Load() (*Config, error) {
 	cfg.GCPProjectID = os.Getenv("GCP_PROJECT_ID")
 	cfg.BigQueryDatasetID = os.Getenv("BIGQUERY_DATASET_ID")
 	cfg.BigQueryTableID = os.Getenv("BIGQUERY_TABLE_ID")
+	cfg.GCPCredentialsPath = os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	cfg.VertexAILocation = os.Getenv("VERTEX_AI_LOCATION")
 	cfg.Port = os.Getenv("PORT")
 
 	return &cfg, nil
@@ -152,4 +156,3 @@ func (c *Config) GetProviderEndpoint(provider string) (string, error) {
 	}
 	return "", fmt.Errorf("provider not found: %s", provider)
 }
-

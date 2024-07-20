@@ -16,6 +16,8 @@ func GetProvider(cfg *config.Config, providerName string) (Provider, error) {
 		return NewAWSBedrockProvider(cfg)
 	case "openai":
 		return NewOpenAIProvider(cfg)
+	case "vertexai_gemini":
+		return NewVertexAIGeminiProvider(cfg)
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", providerName)
 	}

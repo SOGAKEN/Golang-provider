@@ -10,5 +10,9 @@ Assistant:'''
     prompt = "続きを教えて下さい。じゅげむじゅげむ"
     endpoint = "https://api.openai.com/v1"
 
+  [providers.vertexai_gemini]
+    models = ["gemini-pro"]
+    prompt = "続きを教えて下さい。じゅげむじゅげむ"
+
 [default]
-providers = ["aws_bedrock", "openai"]
+	providers = ["aws_bedrock", "openai", "vertexai_gemini"]

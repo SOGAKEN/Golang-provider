@@ -15,13 +15,17 @@ type Config struct {
 	AWSAccessKeyID     string
 	AWSSecretAccessKey string
 	AWSRegion          string
+	OpenAIAPIKey       string
 	GCPProjectID       string
 	BigQueryDatasetID  string
 	BigQueryTableID    string
+	Port               string
 }
 
 type ProviderConfig struct {
-	Models []string `toml:"models"`
+	Models   []string `toml:"models"`
+	Prompt   string   `toml:"prompt"`
+	Endpoint string   `toml:"endpoint"`
 }
 
 type DefaultConfig struct {
@@ -38,9 +42,16 @@ func Load() (*Config, error) {
 	cfg.AWSAccessKeyID = os.Getenv("AWS_ACCESS_KEY_ID")
 	cfg.AWSSecretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
 	cfg.AWSRegion = os.Getenv("AWS_REGION")
+	cfg.OpenAIAPIKey = os.Getenv("OPENAI_API_KEY") // 追加
 	cfg.GCPProjectID = os.Getenv("GCP_PROJECT_ID")
 	cfg.BigQueryDatasetID = os.Getenv("BIGQUERY_DATASET_ID")
 	cfg.BigQueryTableID = os.Getenv("BIGQUERY_TABLE_ID")
+	cfg.Port = os.Getenv("PORT") // 追加
+
+	// ポートが設定されていない場合のデフォルト値
+	if cfg.Port == "" {
+		cfg.Port = "8080"
+	}
 
 	return &cfg, nil
 }
@@ -54,4 +65,18 @@ func (c *Config) GetProviderModels(provider string) ([]string, error) {
 		return providerConfig.Models, nil
 	}
 	return nil, fmt.Errorf("provider not found: %s", provider)
+}
+
+func (c *Config) GetProviderPrompt(provider string) (string, error) {
+	if providerConfig, ok := c.Providers[provider]; ok {
+		return providerConfig.Prompt, nil
+	}
+	return "", fmt.Errorf("provider not found: %s", provider)
+}
+
+func (c *Config) GetProviderEndpoint(provider string) (string, error) {
+	if providerConfig, ok := c.Providers[provider]; ok {
+		return providerConfig.Endpoint, nil
+	}
+	return "", fmt.Errorf("provider not found: %s", provider)
 }

@@ -1,9 +1,14 @@
 [providers]
   [providers.aws_bedrock]
-    models = ["anthropic.claude-v2", "anthropic.claude-instant-v1"]
+	models = ["anthropic.claude-v2", "anthropic.claude-instant-v1"]
+	prompt = '''Human: 続きを教えて下さい。じゅげむじゅげむ
 
-#  [providers.openai]
-#    models = ["gpt-3.5-turbo", "gpt-4"]
+Assistant:'''
+
+  [providers.openai]
+	models = ["gpt-3.5-turbo", "gpt-4"]
+	prompt = "続きを教えて下さい。じゅげむじゅげむ"
+	endpoint = "https://api.openai.com/v1"
 
 [default]
-provider = "aws_bedrock"
+provider = "openai"

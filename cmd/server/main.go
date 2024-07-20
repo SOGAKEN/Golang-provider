@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"provider/internal/api"
 	"provider/internal/config"
@@ -12,8 +13,14 @@ import (
 )
 
 func main() {
+	// .env ファイルを読み込む
 	if err := godotenv.Load(); err != nil {
-		log.Fatal("Error loading .env file")
+		log.Printf("Warning: .env file not found or unable to load")
+	}
+
+	// 環境変数が設定されているか確認
+	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
+		log.Fatal("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set")
 	}
 
 	cfg, err := config.Load()
@@ -27,16 +34,14 @@ func main() {
 	}
 	defer bqClient.Close()
 
-	// サーバー起動時にマイグレーションを実行
-	if err := bqClient.MigrateTable(); err != nil {
-		log.Fatalf("Failed to migrate table: %v", err)
-	}
-
-	//	gin.SetMode(gin.ReleaseMode)
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
 
 	api.SetupRoutes(r, cfg, bqClient)
 
-	r.Run(":8080")
+	log.Printf("Server is starting on :%s", cfg.Port)
+	if err := r.Run(":" + cfg.Port); err != nil {
+		log.Fatalf("Failed to run server: %v", err)
+	}
 }

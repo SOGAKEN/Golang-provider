@@ -14,8 +14,8 @@ func GetProvider(cfg *config.Config, providerName string) (Provider, error) {
 	switch providerName {
 	case "aws_bedrock":
 		return NewAWSBedrockProvider(cfg)
-	// case "openai":
-	//     return NewOpenAIProvider(cfg)
+	case "openai":
+		return NewOpenAIProvider(cfg)
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", providerName)
 	}

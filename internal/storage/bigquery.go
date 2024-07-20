@@ -30,14 +30,12 @@ type BigQueryClient struct {
 func NewBigQueryClient(projectID, datasetID, tableID string) (*BigQueryClient, error) {
 	ctx := context.Background()
 
-	// 環境変数からサービスアカウントキーの内容を取得
-	saKey := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
-	if saKey == "" {
+	credsFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	if credsFile == "" {
 		return nil, fmt.Errorf("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set")
 	}
 
-	// サービスアカウントキーを使用してクライアントを作成
-	client, err := bigquery.NewClient(ctx, projectID, option.WithCredentialsJSON([]byte(saKey)))
+	client, err := bigquery.NewClient(ctx, projectID, option.WithCredentialsFile(credsFile))
 	if err != nil {
 		return nil, fmt.Errorf("bigquery.NewClient: %v", err)
 	}

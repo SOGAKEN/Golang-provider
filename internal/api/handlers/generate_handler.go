@@ -3,7 +3,6 @@ package handlers
 import (
 	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
 	"sync"
 	"time"
@@ -24,14 +23,17 @@ func HandleGenerate(cfg *config.Config, bqClient *storage.BigQueryClient) gin.Ha
 			return
 		}
 
-		prompt := `Human: 続きを教えて下さい。じゅげむじゅげむ
-
-		Assistant:`
-
 		providerName := cfg.GetDefaultProvider()
 		provider, err := providers.GetProvider(cfg, providerName)
 		if err != nil {
 			log.Printf("Failed to get provider: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+			return
+		}
+
+		prompt, err := cfg.GetProviderPrompt(providerName)
+		if err != nil {
+			log.Printf("Failed to get prompt for provider %s: %v", providerName, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
 			return
 		}
@@ -62,7 +64,6 @@ func parallelExecution(model, prompt, providerName string, provider providers.Pr
 		wg.Add(1)
 		go func(attempt int) {
 			defer wg.Done()
-
 			executeAndLog(model, prompt, providerName, provider, bqClient, jst, responses, &mu, attempt)
 		}(i)
 	}
@@ -74,18 +75,14 @@ func sequentialExecution(model, prompt, providerName string, provider providers.
 	var mu sync.Mutex
 	for i := 0; i < 10; i++ {
 		executeAndLog(model, prompt, providerName, provider, bqClient, jst, responses, &mu, i)
-
-		if i < 9 { // 最後の実行後はスリープしない
-			sleepDuration := time.Duration(rand.Intn(4000)+1000) * time.Millisecond
-			time.Sleep(sleepDuration)
-		}
+		time.Sleep(time.Duration(1+i) * time.Second) // Increasing delay between requests
 	}
 }
 
 func executeAndLog(model, prompt, providerName string, provider providers.Provider, bqClient *storage.BigQueryClient, jst *time.Location, responses *map[string][]string, mu *sync.Mutex, attempt int) {
-	modelStartTime := time.Now().In(jst)
+	startTime := time.Now().In(jst)
 	response, err := provider.Generate(prompt, model)
-	modelEndTime := time.Now().In(jst)
+	endTime := time.Now().In(jst)
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -97,10 +94,10 @@ func executeAndLog(model, prompt, providerName string, provider providers.Provid
 		(*responses)[model] = append((*responses)[model], response)
 	}
 
-	responseDuration := modelEndTime.Sub(modelStartTime)
+	responseDuration := endTime.Sub(startTime)
 
 	logEntry := &storage.GenerationLog{
-		Timestamp:    modelStartTime,
+		Timestamp:    startTime,
 		ResponseTime: responseDuration.Seconds(),
 		RequestBody:  prompt,
 		ResponseBody: response,

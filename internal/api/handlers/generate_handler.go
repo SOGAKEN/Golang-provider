@@ -26,7 +26,7 @@ func HandleGenerate(cfg *config.Config, bqClient *storage.BigQueryClient) gin.Ha
 
 		prompt := `Human: 続きを教えて下さい。じゅげむじゅげむ
 
-Assistant:`
+		Assistant:`
 
 		providerName := cfg.GetDefaultProvider()
 		provider, err := providers.GetProvider(cfg, providerName)
@@ -117,4 +117,3 @@ func executeAndLog(model, prompt, providerName string, provider providers.Provid
 	log.Printf("レスポンスボディ: %s", response)
 	log.Printf("プロバイダー: %s", providerName)
 }
-

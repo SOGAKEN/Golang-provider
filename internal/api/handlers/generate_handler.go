@@ -23,34 +23,49 @@ func HandleGenerate(cfg *config.Config, bqClient *storage.BigQueryClient) gin.Ha
 			return
 		}
 
-		providerName := cfg.GetDefaultProvider()
-		provider, err := providers.GetProvider(cfg, providerName)
-		if err != nil {
-			log.Printf("Failed to get provider: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
-			return
-		}
+		defaultProviders := cfg.GetDefaultProviders()
+		responses := make(map[string]map[string][]string)
 
-		prompt, err := cfg.GetProviderPrompt(providerName)
-		if err != nil {
-			log.Printf("Failed to get prompt for provider %s: %v", providerName, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
-			return
-		}
-
-		availableModels := provider.GetModels()
-		responses := make(map[string][]string)
+		var wg sync.WaitGroup
+		var mu sync.Mutex
 
 		jst, _ := time.LoadLocation("Asia/Tokyo")
 
-		for _, model := range availableModels {
-			responses[model] = make([]string, 0, 10)
-			if req.Parallel {
-				parallelExecution(model, prompt, providerName, provider, bqClient, jst, &responses)
-			} else {
-				sequentialExecution(model, prompt, providerName, provider, bqClient, jst, &responses)
-			}
+		for _, providerName := range defaultProviders {
+			wg.Add(1)
+			go func(providerName string) {
+				defer wg.Done()
+
+				provider, err := providers.GetProvider(cfg, providerName)
+				if err != nil {
+					log.Printf("Failed to get provider %s: %v", providerName, err)
+					return
+				}
+
+				prompt, err := cfg.GetProviderPrompt(providerName)
+				if err != nil {
+					log.Printf("Failed to get prompt for provider %s: %v", providerName, err)
+					return
+				}
+
+				availableModels := provider.GetModels()
+				providerResponses := make(map[string][]string)
+
+				for _, model := range availableModels {
+					if req.Parallel {
+						parallelExecution(model, prompt, providerName, provider, bqClient, jst, &providerResponses)
+					} else {
+						sequentialExecution(model, prompt, providerName, provider, bqClient, jst, &providerResponses)
+					}
+				}
+
+				mu.Lock()
+				responses[providerName] = providerResponses
+				mu.Unlock()
+			}(providerName)
 		}
+
+		wg.Wait()
 
 		c.JSON(http.StatusOK, responses)
 	}
@@ -60,38 +75,41 @@ func parallelExecution(model, prompt, providerName string, provider providers.Pr
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
+	modelResponses := make([]string, 0, 10)
+
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func(attempt int) {
 			defer wg.Done()
-			executeAndLog(model, prompt, providerName, provider, bqClient, jst, responses, &mu, attempt)
+			response := executeAndLog(model, prompt, providerName, provider, bqClient, jst, attempt)
+			mu.Lock()
+			modelResponses = append(modelResponses, response)
+			mu.Unlock()
 		}(i)
 	}
 
 	wg.Wait()
+	(*responses)[model] = modelResponses
 }
 
 func sequentialExecution(model, prompt, providerName string, provider providers.Provider, bqClient *storage.BigQueryClient, jst *time.Location, responses *map[string][]string) {
-	var mu sync.Mutex
+	modelResponses := make([]string, 0, 10)
 	for i := 0; i < 10; i++ {
-		executeAndLog(model, prompt, providerName, provider, bqClient, jst, responses, &mu, i)
+		response := executeAndLog(model, prompt, providerName, provider, bqClient, jst, i)
+		modelResponses = append(modelResponses, response)
 		time.Sleep(time.Duration(1+i) * time.Second) // Increasing delay between requests
 	}
+	(*responses)[model] = modelResponses
 }
 
-func executeAndLog(model, prompt, providerName string, provider providers.Provider, bqClient *storage.BigQueryClient, jst *time.Location, responses *map[string][]string, mu *sync.Mutex, attempt int) {
+func executeAndLog(model, prompt, providerName string, provider providers.Provider, bqClient *storage.BigQueryClient, jst *time.Location, attempt int) string {
 	startTime := time.Now().In(jst)
 	response, err := provider.Generate(prompt, model)
 	endTime := time.Now().In(jst)
 
-	mu.Lock()
-	defer mu.Unlock()
-
 	if err != nil {
-		log.Printf("Generation failed for model %s (attempt %d): %v", model, attempt+1, err)
-		(*responses)[model] = append((*responses)[model], fmt.Sprintf("Error: %v", err))
-	} else {
-		(*responses)[model] = append((*responses)[model], response)
+		log.Printf("Generation failed for provider %s, model %s (attempt %d): %v", providerName, model, attempt+1, err)
+		return fmt.Sprintf("Error: %v", err)
 	}
 
 	responseDuration := endTime.Sub(startTime)
@@ -106,11 +124,13 @@ func executeAndLog(model, prompt, providerName string, provider providers.Provid
 	}
 
 	if err := bqClient.InsertGenerationLog(logEntry); err != nil {
-		log.Printf("Failed to insert log to BigQuery for model %s (attempt %d): %v", model, attempt+1, err)
+		log.Printf("Failed to insert log to BigQuery for provider %s, model %s (attempt %d): %v", providerName, model, attempt+1, err)
 	}
 
-	log.Printf("Model: %s, Attempt: %d", model, attempt+1)
+	log.Printf("Provider: %s, Model: %s, Attempt: %d", providerName, model, attempt+1)
 	log.Printf("回答時間: %v", responseDuration)
 	log.Printf("レスポンスボディ: %s", response)
-	log.Printf("プロバイダー: %s", providerName)
+
+	return response
 }
+

@@ -4,6 +4,7 @@ go 1.22.4
 
 require (
 	cloud.google.com/go/bigquery v1.61.0
+	cloud.google.com/go/storage v1.41.0
 	github.com/BurntSushi/toml v0.3.1
 	github.com/aws/aws-sdk-go-v2 v1.30.3
 	github.com/aws/aws-sdk-go-v2/config v1.27.27

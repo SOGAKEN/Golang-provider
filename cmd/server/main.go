@@ -18,9 +18,11 @@ func main() {
 		log.Printf("Warning: .env file not found or unable to load")
 	}
 
-	// 環境変数が設定されているか確認
-	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
-		log.Fatal("GOOGLE_APPLICATION_CREDENTIALS environment variable is not set")
+	// 環境変数が設定されているか確認、未設定の場合はデフォルト値を使用
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // デフォルトポートを8080に設定
+		log.Printf("Defaulting to port %s", port)
 	}
 
 	cfg, err := config.Load()
@@ -40,8 +42,8 @@ func main() {
 
 	api.SetupRoutes(r, cfg, bqClient)
 
-	log.Printf("Server is starting on :%s", cfg.Port)
-	if err := r.Run(":" + cfg.Port); err != nil {
+	log.Printf("Server is starting on :%s", port)
+	if err := r.Run(":" + port); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
 	}
 }

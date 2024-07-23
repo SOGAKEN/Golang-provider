@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"os"
 
 	"provider/internal/api"
 	"provider/internal/config"
@@ -18,19 +17,20 @@ func main() {
 		log.Printf("Warning: .env file not found or unable to load")
 	}
 
+	// 初期設定の読み込み（エラーチェックのみ）
+	initialCfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("Failed to load initial config: %v", err)
+	}
+
 	// 環境変数が設定されているか確認、未設定の場合はデフォルト値を使用
-	port := os.Getenv("PORT")
+	port := initialCfg.Port
 	if port == "" {
 		port = "8080" // デフォルトポートを8080に設定
 		log.Printf("Defaulting to port %s", port)
 	}
 
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
-	}
-
-	bqClient, err := storage.NewBigQueryClient(cfg.GCPProjectID, cfg.BigQueryDatasetID, cfg.BigQueryTableID)
+	bqClient, err := storage.NewBigQueryClient(initialCfg.GCPProjectID, initialCfg.BigQueryDatasetID, initialCfg.BigQueryTableID)
 	if err != nil {
 		log.Fatalf("Failed to create BigQuery client: %v", err)
 	}
@@ -40,10 +40,11 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery())
 
-	api.SetupRoutes(r, cfg, bqClient)
+	api.SetupRoutes(r, bqClient)
 
 	log.Printf("Server is starting on :%s", port)
 	if err := r.Run(":" + port); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
 	}
 }
+

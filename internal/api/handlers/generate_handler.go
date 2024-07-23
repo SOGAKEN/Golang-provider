@@ -15,8 +15,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func HandleGenerate(cfg *config.Config, bqClient *storage.BigQueryClient) gin.HandlerFunc {
+func HandleGenerate(bqClient *storage.BigQueryClient) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 各リクエストで設定を再読み込み
+		cfg, err := config.Load()
+		if err != nil {
+			log.Printf("Failed to load config: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+			return
+		}
+
 		var req models.Request
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -133,4 +141,3 @@ func executeAndLog(model, prompt, providerName string, provider providers.Provid
 
 	return response
 }
-

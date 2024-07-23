@@ -15,12 +15,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func HandleGenerate(bqClient *storage.BigQueryClient) gin.HandlerFunc {
+func HandleGenerate(cfg *config.Config, bqClient *storage.BigQueryClient) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 各リクエストで設定を再読み込み
-		cfg, err := config.Load()
+		// 各リクエストでconfig.tomlを再読み込み
+		tomlCfg, err := config.LoadTOMLConfig()
 		if err != nil {
-			log.Printf("Failed to load config: %v", err)
+			log.Printf("Failed to load TOML config: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
 			return
 		}
@@ -31,7 +31,7 @@ func HandleGenerate(bqClient *storage.BigQueryClient) gin.HandlerFunc {
 			return
 		}
 
-		defaultProviders := cfg.GetDefaultProviders()
+		defaultProviders := tomlCfg.GetDefaultProviders()
 		responses := make(map[string]map[string][]string)
 
 		var wg sync.WaitGroup
@@ -50,13 +50,18 @@ func HandleGenerate(bqClient *storage.BigQueryClient) gin.HandlerFunc {
 					return
 				}
 
-				prompt, err := cfg.GetProviderPrompt(providerName)
+				prompt, err := tomlCfg.GetProviderPrompt(providerName)
 				if err != nil {
 					log.Printf("Failed to get prompt for provider %s: %v", providerName, err)
 					return
 				}
 
-				availableModels := provider.GetModels()
+				availableModels, err := tomlCfg.GetProviderModels(providerName)
+				if err != nil {
+					log.Printf("Failed to get models for provider %s: %v", providerName, err)
+					return
+				}
+
 				providerResponses := make(map[string][]string)
 
 				for _, model := range availableModels {

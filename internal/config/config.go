@@ -16,16 +16,17 @@ type Config struct {
 	Default   DefaultConfig             `toml:"default"`
 
 	// 環境変数から読み込む設定
-	AWSAccessKeyID     string
-	AWSSecretAccessKey string
-	AWSRegion          string
-	OpenAIAPIKey       string
-	GCPProjectID       string
-	BigQueryDatasetID  string
-	BigQueryTableID    string
-	GCPCredentialsPath string
-	VertexAILocation   string
-	Port               string
+	AWSAccessKeyID      string
+	AWSSecretAccessKey  string
+	AWSRegion           string
+	AWSAnthropicVersion string
+	OpenAIAPIKey        string
+	GCPProjectID        string
+	BigQueryDatasetID   string
+	BigQueryTableID     string
+	GCPCredentialsPath  string
+	VertexAILocation    string
+	Port                string
 }
 
 type ProviderConfig struct {
@@ -70,6 +71,7 @@ func Load() (*Config, error) {
 	cfg.AWSAccessKeyID = os.Getenv("AWS_ACCESS_KEY_ID")
 	cfg.AWSSecretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
 	cfg.AWSRegion = os.Getenv("AWS_REGION")
+	cfg.AWSAnthropicVersion = os.Getenv("AWS_ANTHROPIC_VERSION")
 	cfg.OpenAIAPIKey = os.Getenv("OPENAI_API_KEY")
 	cfg.GCPProjectID = os.Getenv("GCP_PROJECT_ID")
 	cfg.BigQueryDatasetID = os.Getenv("BIGQUERY_DATASET_ID")

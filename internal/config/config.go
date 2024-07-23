@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -40,31 +41,18 @@ type DefaultConfig struct {
 }
 
 func Load() (*Config, error) {
-	environment := os.Getenv("ENVIRONMENT")
-	if environment == "" {
-		environment = "local" // デフォルトはローカル環境
-	}
-
-	var configData []byte
+	var cfg Config
 	var err error
 
-	if environment == "local" {
-		configData, err = loadLocalConfig()
-		if err != nil {
-			// ローカル設定の読み込みに失敗した場合、Cloud Storageから読み込む
-			configData, err = loadCloudStorageConfig()
-		}
-	} else {
-		configData, err = loadCloudStorageConfig()
-	}
-
+	// まず Cloud Storage から設定を読み込む
+	err = loadFromCloudStorage(&cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %v", err)
-	}
-
-	var cfg Config
-	if _, err := toml.Decode(string(configData), &cfg); err != nil {
-		return nil, fmt.Errorf("failed to decode config: %v", err)
+		// Cloud Storage からの読み込みに失敗した場合、ローカル設定を試みる
+		log.Printf("Failed to load config from Cloud Storage: %v. Falling back to local config.", err)
+		err = loadFromLocalFile(&cfg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config from both Cloud Storage and local file: %v", err)
+		}
 	}
 
 	// 環境変数から追加の設定を読み込む
@@ -83,37 +71,18 @@ func Load() (*Config, error) {
 	return &cfg, nil
 }
 
-func loadLocalConfig() ([]byte, error) {
-	configPath := os.Getenv("CONFIG_PATH")
-	if configPath == "" {
-		configPath = "config.toml" // デフォルトのパス
-	}
-
-	absPath, err := filepath.Abs(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get absolute path: %v", err)
-	}
-
-	data, err := os.ReadFile(absPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read local config file: %v", err)
-	}
-
-	return data, nil
-}
-
-func loadCloudStorageConfig() ([]byte, error) {
+func loadFromCloudStorage(cfg *Config) error {
 	bucketName := os.Getenv("CONFIG_BUCKET")
 	objectName := os.Getenv("CONFIG_OBJECT")
 
 	if bucketName == "" || objectName == "" {
-		return nil, fmt.Errorf("CONFIG_BUCKET and CONFIG_OBJECT must be set")
+		return fmt.Errorf("CONFIG_BUCKET and CONFIG_OBJECT must be set")
 	}
 
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create storage client: %v", err)
+		return fmt.Errorf("failed to create storage client: %v", err)
 	}
 	defer client.Close()
 
@@ -122,16 +91,43 @@ func loadCloudStorageConfig() ([]byte, error) {
 
 	reader, err := obj.NewReader(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create object reader: %v", err)
+		return fmt.Errorf("failed to create object reader: %v", err)
 	}
 	defer reader.Close()
 
 	data, err := io.ReadAll(reader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read object: %v", err)
+		return fmt.Errorf("failed to read object: %v", err)
 	}
 
-	return data, nil
+	if _, err := toml.Decode(string(data), cfg); err != nil {
+		return fmt.Errorf("failed to decode config: %v", err)
+	}
+
+	return nil
+}
+
+func loadFromLocalFile(cfg *Config) error {
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = "config.toml" // デフォルトのパス
+	}
+
+	absPath, err := filepath.Abs(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path: %v", err)
+	}
+
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return fmt.Errorf("failed to read local config file: %v", err)
+	}
+
+	if _, err := toml.Decode(string(data), cfg); err != nil {
+		return fmt.Errorf("failed to decode config: %v", err)
+	}
+
+	return nil
 }
 
 func (c *Config) GetDefaultProviders() []string {
@@ -158,3 +154,4 @@ func (c *Config) GetProviderEndpoint(provider string) (string, error) {
 	}
 	return "", fmt.Errorf("provider not found: %s", provider)
 }
+
